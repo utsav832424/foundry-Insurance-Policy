@@ -2,6 +2,7 @@
 pragma solidity >0.8.20;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {console} from "forge-std/console.sol";
 
 contract InsurancePolicy is ReentrancyGuard {
     error InsurancePolicy__TransferFailed();
@@ -10,9 +11,9 @@ contract InsurancePolicy is ReentrancyGuard {
     error InsurancePolicy__PolicyExpired();
 
     address public immutable insurer;
-    address public s_policyHolder;
-    uint256 public s_premium;
-    uint256 public s_policyEndDate;
+    address private s_policyHolder;
+    uint256 private s_premium;
+    uint256 private s_policyEndDate;
 
     enum ClaimStatus {
         NotFilled,
@@ -21,10 +22,10 @@ contract InsurancePolicy is ReentrancyGuard {
         Rejected
     }
 
-    ClaimStatus public claimStatus;
+    ClaimStatus private s_claimStatus;
     bool public isActive;
     bool public claimSubmit;
-    mapping(address => uint256) public policies;
+    mapping(address => uint256) private s_policies;
     mapping(address => uint256) public claims;
 
     event PolicyCreated(address indexed policyHolder, uint256 indexed amount);
@@ -70,19 +71,19 @@ contract InsurancePolicy is ReentrancyGuard {
         s_policyEndDate = block.timestamp + _duration;
         isActive = true;
         claimSubmit = false;
-        claimStatus = ClaimStatus.NotFilled;
+        s_claimStatus = ClaimStatus.NotFilled;
         emit PolicyCreated(s_policyHolder, s_premium);
     }
 
     function payPremium() public payable onlyPolicyHolder isPolicyActive nonReentrant {
         require(msg.value == s_premium, "Amount is same as Premium");
-        policies[msg.sender] += msg.value;
+        s_policies[msg.sender] += msg.value;
         emit PayPolicy(s_policyHolder, msg.value);
     }
 
     function fileClaim(uint256 amount) public onlyPolicyHolder isPolicyActive ClaimNotSubmited nonReentrant {
-        require(amount <= policies[msg.sender], "Invalid Amount");
-        claimStatus = ClaimStatus.Pending;
+        require(amount <= s_policies[msg.sender], "Invalid Amount");
+        s_claimStatus = ClaimStatus.Pending;
         claimSubmit = true;
         claims[msg.sender] += amount;
         emit ClaimSubmitted(s_policyHolder, amount);
@@ -90,7 +91,7 @@ contract InsurancePolicy is ReentrancyGuard {
 
     function verifyClaim(address policyholder, bool _isValid) public onlyInsurer nonReentrant {
         require(claims[policyholder] > 0, "Policyholder has no Claims amount");
-        if (claimStatus != ClaimStatus.Pending) {
+        if (s_claimStatus != ClaimStatus.Pending) {
             revert InsurancePolicy__InvalidClaimStatus();
         }
         if (block.timestamp > s_policyEndDate) {
@@ -98,19 +99,19 @@ contract InsurancePolicy is ReentrancyGuard {
         }
 
         if (_isValid) {
-            claimStatus = ClaimStatus.Approved;
+            s_claimStatus = ClaimStatus.Approved;
             payOutClaim(policyholder);
         } else {
-            claimStatus = ClaimStatus.Rejected;
+            s_claimStatus = ClaimStatus.Rejected;
             emit RejectClaim(policyholder, claims[policyholder]);
             claims[policyholder] = 0;
         }
     }
 
     function payOutClaim(address policyholder) internal {
-        require(claimStatus == ClaimStatus.Approved, "Claim is not approved");
+        require(s_claimStatus == ClaimStatus.Approved, "Claim is not approved");
         uint256 payoutAmount = claims[policyholder];
-        policies[policyholder] -= payoutAmount;
+        s_policies[policyholder] -= payoutAmount;
 
         (bool success,) = payable(s_policyHolder).call{value: payoutAmount}("");
         if (!success) {
@@ -125,14 +126,34 @@ contract InsurancePolicy is ReentrancyGuard {
         if (block.timestamp > s_policyEndDate) {
             emit PolicyExpired(s_policyHolder);
             return "Policy has Expired";
-        } else if (claimStatus == ClaimStatus.Pending) {
+        } else if (s_claimStatus == ClaimStatus.Pending) {
             return "Claim is Pending";
-        } else if (claimStatus == ClaimStatus.Approved) {
+        } else if (s_claimStatus == ClaimStatus.Approved) {
             return "Claim has Approved";
-        } else if (claimStatus == ClaimStatus.Rejected) {
+        } else if (s_claimStatus == ClaimStatus.Rejected) {
             return "Claim has Rejected";
         } else {
             return "Policy is Active";
         }
+    }
+
+    function getPolicyHolder() external view returns (address) {
+        return s_policyHolder;
+    }
+
+    function getPremium() external view returns (uint256) {
+        return s_premium;
+    }
+
+    function getPolicyEndDate() external view returns (uint256) {
+        return s_policyEndDate;
+    }
+
+    function getClaimStatus() external view returns (ClaimStatus) {
+        return s_claimStatus;
+    }
+
+    function getPolicies(address user) external view returns (uint256) {
+        return s_policies[user];
     }
 }
