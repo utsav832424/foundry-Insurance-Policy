@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >0.8.20;
 
-contract InsurancePolicy {
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+contract InsurancePolicy is ReentrancyGuard {
     error InsurancePolicy__TransferFailed();
     error InsurancePolicy__NotAuthorized();
     error InsurancePolicy__InvalidClaimStatus();
     error InsurancePolicy__PolicyExpired();
 
-    address public insurer;
+    address public immutable insurer;
     address public s_policyHolder;
     uint256 public s_premium;
     uint256 public s_policyEndDate;
@@ -23,11 +25,14 @@ contract InsurancePolicy {
     bool public isActive;
     bool public claimSubmit;
     mapping(address => uint256) public policies;
+    mapping(address => uint256) public claims;
 
     event PolicyCreated(address indexed policyHolder, uint256 indexed amount);
     event PayPolicy(address indexed policyHolder, uint256 indexed premiumAmount);
-    event ClaimSubmitted(address indexed policyHolder);
-    event VerifyClaim(address indexed policyHolder, bool indexed isValid);
+    event ClaimSubmitted(address indexed policyHolder, uint256 indexed claimAmount);
+    event ApproveClaim(address indexed policyHolder, uint256 indexed approveAmount);
+    event RejectClaim(address indexed policyHolder, uint256 indexed rejectAmount);
+    event PolicyExpired(address indexed policyHolder);
 
     modifier onlyPolicyHolder() {
         if (msg.sender != s_policyHolder) {
@@ -51,13 +56,16 @@ contract InsurancePolicy {
     }
 
     modifier ClaimNotSubmited() {
-        require(!claimSubmit, "Claim has already sibmitted");
+        require(!claimSubmit, "Claim has already submitted");
         _;
     }
 
-    constructor(address _policyHolder, uint256 _premium, uint256 _duration) {
+    constructor() {
         insurer = msg.sender;
-        s_policyHolder = _policyHolder;
+    }
+
+    function registerPolicyholder(uint256 _premium, uint256 _duration) public {
+        s_policyHolder = msg.sender;
         s_premium = _premium;
         s_policyEndDate = block.timestamp + _duration;
         isActive = true;
@@ -66,19 +74,22 @@ contract InsurancePolicy {
         emit PolicyCreated(s_policyHolder, s_premium);
     }
 
-    function payPremium() public payable onlyPolicyHolder isPolicyActive {
+    function payPremium() public payable onlyPolicyHolder isPolicyActive nonReentrant {
         require(msg.value == s_premium, "Amount is same as Premium");
         policies[msg.sender] += msg.value;
         emit PayPolicy(s_policyHolder, msg.value);
     }
 
-    function fileClaim() public onlyPolicyHolder isPolicyActive ClaimNotSubmited {
+    function fileClaim(uint256 amount) public onlyPolicyHolder isPolicyActive ClaimNotSubmited nonReentrant {
+        require(amount <= policies[msg.sender], "Invalid Amount");
         claimStatus = ClaimStatus.Pending;
         claimSubmit = true;
-        emit ClaimSubmitted(s_policyHolder);
+        claims[msg.sender] += amount;
+        emit ClaimSubmitted(s_policyHolder, amount);
     }
 
-    function verifyClaim(bool _isValid, string memory rejectNote) public onlyInsurer {
+    function verifyClaim(address policyholder, bool _isValid) public onlyInsurer nonReentrant {
+        require(claims[policyholder] > 0, "Policyholder has no Claims amount");
         if (claimStatus != ClaimStatus.Pending) {
             revert InsurancePolicy__InvalidClaimStatus();
         }
@@ -86,31 +97,42 @@ contract InsurancePolicy {
             revert InsurancePolicy__PolicyExpired();
         }
 
-        emit VerifyClaim(s_policyHolder, _isValid);
         if (_isValid) {
             claimStatus = ClaimStatus.Approved;
-
-            payOutClaim();
+            payOutClaim(policyholder);
         } else {
             claimStatus = ClaimStatus.Rejected;
-            rejectPolicy(rejectNote);
+            emit RejectClaim(policyholder, claims[policyholder]);
+            claims[policyholder] = 0;
         }
     }
 
-    function payOutClaim() internal {
+    function payOutClaim(address policyholder) internal {
         require(claimStatus == ClaimStatus.Approved, "Claim is not approved");
-        uint256 payoutAmount = address(this).balance;
-        policies[s_policyHolder] -= payoutAmount;
+        uint256 payoutAmount = claims[policyholder];
+        policies[policyholder] -= payoutAmount;
 
         (bool success,) = payable(s_policyHolder).call{value: payoutAmount}("");
         if (!success) {
             revert InsurancePolicy__TransferFailed();
         }
+        emit ApproveClaim(policyholder, claims[policyholder]);
+        claims[policyholder] = 0;
         isActive = false;
     }
 
-    function rejectPolicy(string memory rejectNote) private returns (string memory) {
-        claimStatus = ClaimStatus.NotFilled;
-        return rejectNote;
+    function checkPolicyStatus() public returns (string memory) {
+        if (block.timestamp > s_policyEndDate) {
+            emit PolicyExpired(s_policyHolder);
+            return "Policy has Expired";
+        } else if (claimStatus == ClaimStatus.Pending) {
+            return "Claim is Pending";
+        } else if (claimStatus == ClaimStatus.Approved) {
+            return "Claim has Approved";
+        } else if (claimStatus == ClaimStatus.Rejected) {
+            return "Claim has Rejected";
+        } else {
+            return "Policy is Active";
+        }
     }
 }
