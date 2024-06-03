@@ -1,66 +1,17 @@
-## Foundry
+# Insurance Policy
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## About
 
-Foundry consists of:
+This Project contains the smart contracts for Insurance Policy deployed on the Sepolia testnet.
+In this insurance policy smart contract built with Solidity, there are two main entities: the policyholder and the insurer.
+    1) The policyholder is the person or entity purchasing the insurance to get financial protection against potential risks or losses. 
+    2) The insurer, on the other hand, is the company providing the insurance coverage in exchange for a premium paid by the policyholder. 
+    3) The smart contract automates the agreement between these two parties, ensuring that claims are processed and payments are made according to the predefined terms, all without the need for intermediaries. This creates a transparent, efficient, and tamper-proof insurance process.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Process
 
-## Documentation
+![Insurance Policy Smart Contract Process](<Insurance Policy Smart Contract Process.png>)
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Deployment
+- Insurance policy Contract Address: **0x1c430cb256e0bA6B655C6FBBAa1478AFeb7b6A4F**
+- Sepolia Testnet Explorer: **[https://sepolia.etherscan.io]**
