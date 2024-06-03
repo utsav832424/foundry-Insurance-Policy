@@ -26,7 +26,7 @@ contract InsurancePolicy is ReentrancyGuard {
     bool public isActive;
     bool public claimSubmit;
     mapping(address => uint256) private s_policies;
-    mapping(address => uint256) public claims;
+    mapping(address => uint256) private claims;
 
     event PolicyCreated(address indexed policyHolder, uint256 indexed amount);
     event PayPolicy(address indexed policyHolder, uint256 indexed premiumAmount);
@@ -83,9 +83,9 @@ contract InsurancePolicy is ReentrancyGuard {
 
     function fileClaim(uint256 amount) public onlyPolicyHolder isPolicyActive ClaimNotSubmited nonReentrant {
         require(amount <= s_policies[msg.sender], "Invalid Amount");
-        s_claimStatus = ClaimStatus.Pending;
         claimSubmit = true;
         claims[msg.sender] += amount;
+        s_claimStatus = ClaimStatus.Pending;
         emit ClaimSubmitted(s_policyHolder, amount);
     }
 
@@ -155,5 +155,9 @@ contract InsurancePolicy is ReentrancyGuard {
 
     function getPolicies(address user) external view returns (uint256) {
         return s_policies[user];
+    }
+
+    function getClaims(address user) external view returns (uint256) {
+        return claims[user];
     }
 }
